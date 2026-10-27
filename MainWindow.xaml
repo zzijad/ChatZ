@@ -1,0 +1,179 @@
+<Window x:Class="ChatZ.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        xmlns:tb="clr-namespace:H.NotifyIcon;assembly=H.NotifyIcon.Wpf"
+        xmlns:local="clr-namespace:ChatZ"
+        Title="ChatZ"
+        Width="1280" Height="800" MinWidth="720" MinHeight="480"
+        WindowStartupLocation="CenterScreen"
+        Icon="/Assets/chatz.ico"
+        FontFamily="Segoe UI"
+        Background="{StaticResource PageBrush}"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Window.TaskbarItemInfo>
+        <TaskbarItemInfo x:Name="TaskbarInfo"/>
+    </Window.TaskbarItemInfo>
+
+    <Window.Resources>
+        <!-- Ikonica u trayu (pravi se iz koda, radi i kad je prozor sakriven) -->
+        <tb:TaskbarIcon x:Key="TrayIcon"
+                        IconSource="/Assets/chatz.ico"
+                        ToolTipText="ChatZ"
+                        TrayLeftMouseUp="Tray_LeftMouseUp">
+            <tb:TaskbarIcon.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Otvori ChatZ" Click="TrayOpen_Click" FontWeight="SemiBold"/>
+                    <Separator/>
+                    <MenuItem Header="Izlaz" Click="Exit_Click"/>
+                </ContextMenu>
+            </tb:TaskbarIcon.ContextMenu>
+        </tb:TaskbarIcon>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="30"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="76"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ===== Leva traka ===== -->
+        <Grid Grid.Row="0" Grid.Column="0" Background="{StaticResource SidebarBrush}">
+            <StackPanel Margin="0,14,0,0" HorizontalAlignment="Center">
+
+                <RadioButton x:Name="BtnWhatsApp" Style="{StaticResource ServiceButton}"
+                             ToolTip="WhatsApp (Ctrl+1)" Checked="Service_Checked" Tag="wa">
+                    <Grid>
+                        <Ellipse Width="38" Height="38" Fill="#2E7D4F"/>
+                        <TextBlock Text="W" Foreground="White" FontSize="17" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Border x:Name="BadgeWhatsApp" Style="{StaticResource Badge}">
+                            <TextBlock x:Name="BadgeWhatsAppText" Style="{StaticResource BadgeText}"/>
+                        </Border>
+                    </Grid>
+                </RadioButton>
+
+                <RadioButton x:Name="BtnTelegram" Style="{StaticResource ServiceButton}"
+                             ToolTip="Telegram (Ctrl+2)" Checked="Service_Checked" Tag="tg">
+                    <Grid>
+                        <Ellipse Width="38" Height="38" Fill="#1F6FB2"/>
+                        <TextBlock Text="T" Foreground="White" FontSize="17" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Border x:Name="BadgeTelegram" Style="{StaticResource Badge}">
+                            <TextBlock x:Name="BadgeTelegramText" Style="{StaticResource BadgeText}"/>
+                        </Border>
+                    </Grid>
+                </RadioButton>
+
+                <RadioButton x:Name="BtnViber" Style="{StaticResource ServiceButton}"
+                             ToolTip="Viber (Ctrl+3)" Checked="Service_Checked" Tag="vb">
+                    <Grid>
+                        <Ellipse Width="38" Height="38" Fill="#6A4BB5"/>
+                        <TextBlock Text="V" Foreground="White" FontSize="17" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
+                </RadioButton>
+            </StackPanel>
+
+            <Button x:Name="SettingsButton" VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                    Margin="0,0,0,14" Width="48" Height="48" Cursor="Hand"
+                    ToolTip="Podešavanja" Click="Settings_Click"
+                    Background="Transparent" BorderThickness="0">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="12">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#2C3540"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+                <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="20" Foreground="#B9C1CB"/>
+                <Button.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem x:Name="MenuAutostart" Header="Pokretanje sa Windowsom"
+                                  IsCheckable="True" Click="Autostart_Click"/>
+                        <MenuItem Header="Osveži aktivni servis" InputGestureText="F5" Click="Reload_Click"/>
+                        <MenuItem Header="Ponovo poveži Viber" Click="ViberReconnect_Click"/>
+                        <MenuItem Header="Izaberi Viber.exe…" Click="ViberBrowse_Click"/>
+                        <Separator/>
+                        <MenuItem Header="Izlaz" Click="Exit_Click"/>
+                    </ContextMenu>
+                </Button.ContextMenu>
+            </Button>
+        </Grid>
+
+        <!-- ===== Glavni deo ===== -->
+        <Grid Grid.Row="0" Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Orientation="Horizontal" Margin="16,10,16,8">
+                <TextBlock x:Name="HeaderName" Text="WhatsApp" FontSize="18" FontWeight="SemiBold"
+                           VerticalAlignment="Center" Foreground="#1B1E23"/>
+                <Border Background="#E6E9ED" CornerRadius="10" Padding="10,3" Margin="12,0,0,0"
+                        VerticalAlignment="Center">
+                    <TextBlock x:Name="HeaderTech" Text="WebView2" FontSize="12"
+                               Foreground="{StaticResource MutedBrush}"/>
+                </Border>
+            </StackPanel>
+
+            <Border Grid.Row="1" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0">
+                <Grid>
+                    <wv2:WebView2 x:Name="WebWhatsApp" Visibility="Hidden"/>
+                    <wv2:WebView2 x:Name="WebTelegram" Visibility="Hidden"/>
+
+                    <Grid x:Name="ViberPane" Visibility="Hidden" Background="White">
+                        <local:ViberHost x:Name="ViberHostControl" Visibility="Hidden"/>
+
+                        <StackPanel x:Name="ViberPlaceholder" HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" MaxWidth="460">
+                            <Grid Width="64" Height="64" Margin="0,0,0,12">
+                                <Ellipse Fill="#6A4BB5"/>
+                                <TextBlock Text="V" Foreground="White" FontSize="28" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <TextBlock x:Name="ViberStatusTitle" Text="Pokrećem Viber…" FontSize="17"
+                                       FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="#1B1E23"/>
+                            <TextBlock x:Name="ViberStatusText" FontSize="14" TextWrapping="Wrap"
+                                       TextAlignment="Center" Margin="0,8,0,0"
+                                       Foreground="{StaticResource MutedBrush}"
+                                       Text="ChatZ pokreće instalirani Viber Desktop i ugrađuje njegov prozor ovde."/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
+                                <Button x:Name="ViberRetryButton" Content="Pokreni ponovo"
+                                        Style="{StaticResource PlainButton}" Click="ViberReconnect_Click"
+                                        Visibility="Collapsed"/>
+                                <Button x:Name="ViberBrowseButton" Content="Izaberi Viber.exe…"
+                                        Style="{StaticResource PlainButton}" Click="ViberBrowse_Click"
+                                        Margin="8,0,0,0" Visibility="Collapsed"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ===== Statusna traka ===== -->
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Background="White"
+                BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" Margin="16,0" VerticalAlignment="Center">
+                <TextBlock x:Name="StatusUnread" Text="Ukupno nepročitano: 0" FontSize="12"
+                           Foreground="{StaticResource MutedBrush}"/>
+                <TextBlock Text="Zatvaranje → tray" FontSize="12" Margin="18,0,0,0"
+                           Foreground="{StaticResource MutedBrush}"/>
+                <TextBlock x:Name="StatusAutostart" Text="Pokretanje sa Windowsom: isključeno"
+                           FontSize="12" Margin="18,0,0,0" Foreground="{StaticResource MutedBrush}"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
