@@ -22,7 +22,8 @@ WhatsApp, Telegram i Viber u jednom prozoru (WPF, .NET 10).
 dotnet build -c Release
 ```
 
-ili otvori `ChatZ.csproj` u Visual Studiju. Na GitHubu workflow pravi `ChatZ-win-x64.zip`; tag `v1.0.0` pravi i release.
+ili otvori `ChatZ.csproj` u Visual Studiju. Na GitHubu svaki push na `main` pravi `ChatZ-win-x64.zip`
+i release `v<Version>` (verzija iz `ChatZ.csproj`). Za novu verziju podigni `<Version>`.
 
 Podaci (prijave, podešavanja): `%LOCALAPPDATA%\ChatZ`.
 
