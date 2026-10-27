@@ -26,16 +26,23 @@ public partial class MainWindow : Window
     private static readonly Regex UnreadRegex = new(@"\((\d+)\)", RegexOptions.Compiled);
 
     private readonly AppSettings _settings = AppSettings.Load();
-    private readonly Dictionary<string, int> _unread = new() { ["wa"] = 0, ["tg"] = 0 };
+    private readonly Dictionary<string, int> _unread = new() { ["wa"] = 0, ["tg"] = 0, ["vb"] = 0 };
     private readonly DispatcherTimer _viberPoll = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private readonly DispatcherTimer _viberWatch = new() { Interval = TimeSpan.FromSeconds(2) };
+    private readonly DispatcherTimer _viberCount = new() { Interval = TimeSpan.FromSeconds(5) };
+    private readonly DispatcherTimer _idleCheck = new() { Interval = TimeSpan.FromSeconds(15) };
     private readonly TaskbarIcon _tray;
 
     private Service _active = WhatsApp;
     private bool _exiting;
     private bool _startHidden;
     private bool _viberWasAttached;
+    private bool _viberScanning;
     private int _viberPollTries;
+
+    private bool _locked;
+    private int _failedAttempts;
+    private DateTime _lockoutUntil = DateTime.MinValue;
 
     public MainWindow()
     {
@@ -46,8 +53,14 @@ public partial class MainWindow : Window
 
         _viberPoll.Tick += ViberPoll_Tick;
         _viberWatch.Tick += ViberWatch_Tick;
+        _viberCount.Tick += ViberCount_Tick;
+        _idleCheck.Tick += IdleCheck_Tick;
 
         RefreshAutostartUi();
+        RefreshPinUi();
+        if (_settings.PinEnabled) Lock();
+        _idleCheck.Start();
+
         Loaded += MainWindow_Loaded;
     }
 
@@ -76,6 +89,7 @@ public partial class MainWindow : Window
         await InitWebAsync(WebTelegram, Telegram);
         StartViber();
         _viberWatch.Start();
+        _viberCount.Start();
     }
 
     // ===================== Servisi i prebacivanje =====================
@@ -92,8 +106,11 @@ public partial class MainWindow : Window
         HeaderName.Text = _active.Name;
         HeaderTech.Text = _active.Tech;
 
-        if (_active == Viber) ViberHostControl.FocusViber();
-        else (_active == WhatsApp ? WebWhatsApp : WebTelegram).Focus();
+        if (!_locked)
+        {
+            if (_active == Viber) ViberHostControl.FocusViber();
+            else (_active == WhatsApp ? WebWhatsApp : WebTelegram).Focus();
+        }
 
         _settings.LastService = _active.Id;
         _settings.Save();
@@ -102,7 +119,14 @@ public partial class MainWindow : Window
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (Keyboard.Modifiers == ModifierKeys.Control)
+        if (_locked) return;
+
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.L && _settings.PinEnabled)
+        {
+            Lock();
+            e.Handled = true;
+        }
+        else if (Keyboard.Modifiers == ModifierKeys.Control)
         {
             RadioButton? target = e.Key switch
             {
@@ -188,7 +212,12 @@ public partial class MainWindow : Window
     {
         _unread[id] = count;
 
-        var (badge, text) = id == "wa" ? (BadgeWhatsApp, BadgeWhatsAppText) : (BadgeTelegram, BadgeTelegramText);
+        var (badge, text) = id switch
+        {
+            "wa" => (BadgeWhatsApp, BadgeWhatsAppText),
+            "tg" => (BadgeTelegram, BadgeTelegramText),
+            _ => (BadgeViber, BadgeViberText),
+        };
         badge.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
         text.Text = count > 99 ? "99+" : count.ToString();
 
@@ -294,7 +323,156 @@ public partial class MainWindow : Window
             ViberHostControl.Detach();
             ShowViberStatus("Viber je zatvoren",
                 "Viber Desktop je ugašen ili se restartovao (npr. posle update-a).", retry: true, browse: false);
+            SetUnread("vb", 0);
         }
+    }
+
+    private async void ViberCount_Tick(object? sender, EventArgs e)
+    {
+        if (_viberScanning || !ViberHostControl.IsAttached) return;
+
+        _viberScanning = true;
+        try
+        {
+            IntPtr hwnd = ViberHostControl.ViberWindow;
+            int? count = await Task.Run(() => ViberUnread.Count(hwnd));
+            if (_unread["vb"] != (count ?? 0)) SetUnread("vb", count ?? 0);
+        }
+        finally
+        {
+            _viberScanning = false;
+        }
+    }
+
+    private async void ViberDiagnostics_Click(object sender, RoutedEventArgs e)
+    {
+        if (!ViberHostControl.IsAttached)
+        {
+            MessageBox.Show(this, "Viber trenutno nije povezan sa ChatZ-om.", "ChatZ",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+            "ChatZ-viber-dijagnostika.txt");
+        IntPtr hwnd = ViberHostControl.ViberWindow;
+
+        Cursor = Cursors.Wait;
+        try
+        {
+            await Task.Run(() => ViberUnread.WriteDiagnostics(hwnd, path));
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "ChatZ", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        finally
+        {
+            Cursor = null;
+        }
+
+        MessageBox.Show(this,
+            "Snimljeno na Desktop: ChatZ-viber-dijagnostika.txt\n\n" +
+            "Imena i tekst poruka su sakriveni, ostali su samo brojevi i vrste elemenata. " +
+            "Najbolje je da pre snimanja imaš bar jednu nepročitanu Viber poruku.",
+            "ChatZ", MessageBoxButton.OK, MessageBoxImage.Information);
+        try { Process.Start("explorer.exe", $"/select,\"{path}\""); } catch { }
+    }
+
+    // ===================== PIN zaštita =====================
+
+    private void Lock()
+    {
+        if (!_settings.PinEnabled || _locked) return;
+
+        _locked = true;
+        ContentRoot.Visibility = Visibility.Hidden; // sakriva i WebView2 i Viber prozor
+        LockPanel.Visibility = Visibility.Visible;
+        LockPassword.Clear();
+        LockError.Visibility = Visibility.Collapsed;
+        if (IsVisible && IsActive) LockPassword.Focus();
+    }
+
+    private void TryUnlock()
+    {
+        if (DateTime.Now < _lockoutUntil)
+        {
+            int secs = (int)Math.Ceiling((_lockoutUntil - DateTime.Now).TotalSeconds);
+            ShowLockError($"Previše pogrešnih pokušaja. Sačekaj još {secs} s.");
+            LockPassword.Clear();
+            return;
+        }
+
+        if (_settings.VerifyPin(LockPassword.Password))
+        {
+            _locked = false;
+            _failedAttempts = 0;
+            LockPassword.Clear();
+            LockPanel.Visibility = Visibility.Collapsed;
+            ContentRoot.Visibility = Visibility.Visible;
+
+            if (_active == Viber) ViberHostControl.FocusViber();
+            else (_active == WhatsApp ? WebWhatsApp : WebTelegram).Focus();
+            return;
+        }
+
+        LockPassword.Clear();
+        if (++_failedAttempts >= 5)
+        {
+            _failedAttempts = 0;
+            _lockoutUntil = DateTime.Now.AddSeconds(30);
+            ShowLockError("Previše pogrešnih pokušaja. Sačekaj 30 sekundi.");
+        }
+        else
+        {
+            ShowLockError("Pogrešan PIN.");
+        }
+    }
+
+    private void ShowLockError(string text)
+    {
+        LockError.Text = text;
+        LockError.Visibility = Visibility.Visible;
+    }
+
+    private void LockPassword_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            TryUnlock();
+            e.Handled = true;
+        }
+    }
+
+    private void Unlock_Click(object sender, RoutedEventArgs e) => TryUnlock();
+
+    private void LockNow_Click(object sender, RoutedEventArgs e) => Lock();
+
+    private void PinSettings_Click(object sender, RoutedEventArgs e)
+    {
+        if (_locked) return;
+        new PinDialog(_settings) { Owner = this }.ShowDialog();
+        RefreshPinUi();
+    }
+
+    private void RefreshPinUi()
+    {
+        bool on = _settings.PinEnabled;
+        LockButton.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        MenuLockNow.IsEnabled = on;
+    }
+
+    private void IdleCheck_Tick(object? sender, EventArgs e)
+    {
+        if (_locked || !_settings.PinEnabled || _settings.AutoLockMinutes <= 0) return;
+        if (Native.IdleTime() >= TimeSpan.FromMinutes(_settings.AutoLockMinutes)) Lock();
+    }
+
+    protected override void OnStateChanged(EventArgs e)
+    {
+        base.OnStateChanged(e);
+        if (WindowState == WindowState.Minimized) Lock();
     }
 
     private void ShowViberStatus(string title, string text, bool retry, bool browse)
@@ -363,6 +541,7 @@ public partial class MainWindow : Window
         Show();
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Activate();
+        if (_locked) LockPassword.Focus();
     }
 
     private void Exit_Click(object sender, RoutedEventArgs e)
@@ -377,12 +556,15 @@ public partial class MainWindow : Window
         {
             // X samo sklanja prozor u tray.
             e.Cancel = true;
+            Lock();
             Hide();
             return;
         }
 
         _viberPoll.Stop();
         _viberWatch.Stop();
+        _viberCount.Stop();
+        _idleCheck.Stop();
         ViberHostControl.Detach(); // Viber nastavlja da radi u svom trayu
         base.OnClosing(e);
     }

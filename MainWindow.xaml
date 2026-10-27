@@ -76,9 +76,30 @@
                         <Ellipse Width="38" Height="38" Fill="#6A4BB5"/>
                         <TextBlock Text="V" Foreground="White" FontSize="17" FontWeight="Bold"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Border x:Name="BadgeViber" Style="{StaticResource Badge}">
+                            <TextBlock x:Name="BadgeViberText" Style="{StaticResource BadgeText}"/>
+                        </Border>
                     </Grid>
                 </RadioButton>
             </StackPanel>
+
+            <Button x:Name="LockButton" VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                    Margin="0,0,0,68" Width="48" Height="48" Cursor="Hand"
+                    ToolTip="Zaključaj (Ctrl+L)" Click="LockNow_Click" Visibility="Collapsed">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="12">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#2C3540"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+                <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="20" Foreground="#B9C1CB"/>
+            </Button>
 
             <Button x:Name="SettingsButton" VerticalAlignment="Bottom" HorizontalAlignment="Center"
                     Margin="0,0,0,14" Width="48" Height="48" Cursor="Hand"
@@ -101,9 +122,14 @@
                     <ContextMenu>
                         <MenuItem x:Name="MenuAutostart" Header="Pokretanje sa Windowsom"
                                   IsCheckable="True" Click="Autostart_Click"/>
+                        <MenuItem Header="PIN zaštita…" Click="PinSettings_Click"/>
+                        <MenuItem x:Name="MenuLockNow" Header="Zaključaj odmah" InputGestureText="Ctrl+L"
+                                  Click="LockNow_Click"/>
+                        <Separator/>
                         <MenuItem Header="Osveži aktivni servis" InputGestureText="F5" Click="Reload_Click"/>
                         <MenuItem Header="Ponovo poveži Viber" Click="ViberReconnect_Click"/>
                         <MenuItem Header="Izaberi Viber.exe…" Click="ViberBrowse_Click"/>
+                        <MenuItem Header="Viber dijagnostika (za brojač)…" Click="ViberDiagnostics_Click"/>
                         <Separator/>
                         <MenuItem Header="Izlaz" Click="Exit_Click"/>
                     </ContextMenu>
@@ -112,7 +138,7 @@
         </Grid>
 
         <!-- ===== Glavni deo ===== -->
-        <Grid Grid.Row="0" Grid.Column="1">
+        <Grid x:Name="ContentRoot" Grid.Row="0" Grid.Column="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
@@ -161,6 +187,28 @@
                     </Grid>
                 </Grid>
             </Border>
+        </Grid>
+
+        <!-- ===== Ekran za zaključavanje (pokriva i traku i sadržaj) ===== -->
+        <Grid x:Name="LockPanel" Grid.Row="0" Grid.ColumnSpan="2" Visibility="Collapsed"
+              Background="{StaticResource PageBrush}">
+            <StackPanel Width="300" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Grid Width="64" Height="64" Margin="0,0,0,14">
+                    <Ellipse Fill="#2B3440"/>
+                    <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="26" Foreground="White"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Grid>
+                <TextBlock Text="ChatZ je zaključan" FontSize="18" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Foreground="#1B1E23"/>
+                <TextBlock Text="Unesi PIN ili lozinku" FontSize="13" Margin="0,4,0,16"
+                           HorizontalAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                <PasswordBox x:Name="LockPassword" Height="40" FontSize="18" Padding="10,6"
+                             HorizontalContentAlignment="Center" KeyDown="LockPassword_KeyDown"/>
+                <TextBlock x:Name="LockError" Foreground="#B3261E" FontSize="13" TextWrapping="Wrap"
+                           TextAlignment="Center" Margin="0,8,0,0" Visibility="Collapsed"/>
+                <Button x:Name="UnlockButton" Content="Otključaj" Style="{StaticResource PlainButton}"
+                        Margin="0,12,0,0" Click="Unlock_Click"/>
+            </StackPanel>
         </Grid>
 
         <!-- ===== Statusna traka ===== -->

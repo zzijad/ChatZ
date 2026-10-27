@@ -1,4 +1,5 @@
 using System.IO;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Win32;
 
@@ -8,6 +9,15 @@ public class AppSettings
 {
     public string? ViberPath { get; set; }
     public string LastService { get; set; } = "wa";
+
+    /// <summary>PBKDF2 heš PIN-a (Base64). null = PIN zaštita isključena.</summary>
+    public string? PinHash { get; set; }
+    public string? PinSalt { get; set; }
+
+    /// <summary>Zaključavanje posle ovoliko minuta neaktivnosti (0 = nikad).</summary>
+    public int AutoLockMinutes { get; set; } = 5;
+
+    public bool PinEnabled => !string.IsNullOrEmpty(PinHash) && !string.IsNullOrEmpty(PinSalt);
 
     public static string DataDir { get; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ChatZ");
@@ -34,6 +44,37 @@ public class AppSettings
         }
         catch { }
     }
+
+    public void SetPin(string pin)
+    {
+        byte[] salt = RandomNumberGenerator.GetBytes(16);
+        PinSalt = Convert.ToBase64String(salt);
+        PinHash = Convert.ToBase64String(Derive(pin, salt));
+    }
+
+    public void ClearPin()
+    {
+        PinHash = null;
+        PinSalt = null;
+    }
+
+    public bool VerifyPin(string pin)
+    {
+        if (!PinEnabled) return true;
+        try
+        {
+            byte[] salt = Convert.FromBase64String(PinSalt!);
+            byte[] expected = Convert.FromBase64String(PinHash!);
+            return CryptographicOperations.FixedTimeEquals(Derive(pin, salt), expected);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static byte[] Derive(string pin, byte[] salt) =>
+        Rfc2898DeriveBytes.Pbkdf2(pin, salt, 200_000, HashAlgorithmName.SHA256, 32);
 }
 
 public static class Autostart

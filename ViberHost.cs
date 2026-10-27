@@ -19,6 +19,8 @@ public class ViberHost : HwndHost
 
     public bool IsAttached => _viber != IntPtr.Zero && Native.IsWindow(_viber);
 
+    public IntPtr ViberWindow => _viber;
+
     protected override HandleRef BuildWindowCore(HandleRef hwndParent)
     {
         _container = Native.CreateWindowEx(0, "static", "",

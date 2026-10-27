@@ -81,6 +81,20 @@ internal static class Native
         else SetWindowLong32(hWnd, index, unchecked((int)value));
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+
+    [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+
+    /// <summary>Koliko dugo nije bilo miša ni tastature (na celom računaru).</summary>
+    public static TimeSpan IdleTime()
+    {
+        var info = new LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<LASTINPUTINFO>() };
+        if (!GetLastInputInfo(ref info)) return TimeSpan.Zero;
+        uint idleMs = unchecked((uint)Environment.TickCount - info.dwTime);
+        return TimeSpan.FromMilliseconds(idleMs);
+    }
+
     public static string GetTitle(IntPtr hWnd)
     {
         var sb = new StringBuilder(256);
