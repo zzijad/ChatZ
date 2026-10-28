@@ -442,12 +442,6 @@ public partial class MainWindow : Window
         if (Native.IdleTime() >= TimeSpan.FromMinutes(_settings.AutoLockMinutes)) Lock();
     }
 
-    protected override void OnStateChanged(EventArgs e)
-    {
-        base.OnStateChanged(e);
-        if (WindowState == WindowState.Minimized) Lock();
-    }
-
     private void ShowViberStatus(string title, string text, bool retry, bool browse)
     {
         ViberHostControl.Visibility = Visibility.Hidden;
