@@ -76,7 +76,7 @@
                         <Ellipse Width="38" Height="38" Fill="#6A4BB5"/>
                         <TextBlock Text="V" Foreground="White" FontSize="17" FontWeight="Bold"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        <Border x:Name="BadgeViber" Style="{StaticResource Badge}">
+                        <Border x:Name="BadgeViber" Style="{StaticResource Badge}" MinWidth="14" Height="14" Margin="0,4,4,0" ToolTip="Ima novih Viber poruka">
                             <TextBlock x:Name="BadgeViberText" Style="{StaticResource BadgeText}"/>
                         </Border>
                     </Grid>
@@ -142,7 +142,6 @@
                         <MenuItem Header="Osveži aktivni servis" InputGestureText="F5" Click="Reload_Click"/>
                         <MenuItem Header="Ponovo poveži Viber" Click="ViberReconnect_Click"/>
                         <MenuItem Header="Izaberi Viber.exe…" Click="ViberBrowse_Click"/>
-                        <MenuItem Header="Viber dijagnostika (za brojač)…" Click="ViberDiagnostics_Click"/>
                         <Separator/>
                         <MenuItem Header="Izlaz" Click="Exit_Click"/>
                     </ContextMenu>

@@ -5,6 +5,7 @@ WhatsApp, Telegram i Viber u jednom prozoru (WPF, .NET 10).
 - **WhatsApp** i **Telegram** rade kroz WebView2 (web.whatsapp.com, web.telegram.org), svaki sa svojim sačuvanim profilom.
 - **Viber**: ChatZ pokreće instalirani Viber Desktop i ugrađuje njegov prozor u treći tab.
 - Brojač nepročitanih na dugmićima, u naslovu, na taskbaru i u tray tooltipu (WhatsApp, Telegram).
+- Viber: crvena tačka kad ima novih poruka (čita se sa Viber ikonice u trayu — ikonica mora biti vidljiva, ne pod „^“). Viber ne objavljuje tačan broj.
 - X sklanja program u tray; „Izlaz“ iz menija ga gasi (Viber tada ostaje u svom trayu).
 - Pokretanje sa Windowsom (počinje sakriven u trayu).
 - Prečice: `Ctrl+1/2/3` menja servis, `F5` osvežava aktivni.

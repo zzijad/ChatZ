@@ -26,10 +26,13 @@ public partial class MainWindow : Window
     private static readonly Regex UnreadRegex = new(@"\((\d+)\)", RegexOptions.Compiled);
 
     private readonly AppSettings _settings = AppSettings.Load();
-    private readonly Dictionary<string, int> _unread = new() { ["wa"] = 0, ["tg"] = 0, ["vb"] = 0 };
+    private readonly Dictionary<string, int> _unread = new() { ["wa"] = 0, ["tg"] = 0 };
     private readonly DispatcherTimer _viberPoll = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private readonly DispatcherTimer _viberWatch = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly DispatcherTimer _idleCheck = new() { Interval = TimeSpan.FromSeconds(15) };
+    private readonly DispatcherTimer _viberDot = new() { Interval = TimeSpan.FromSeconds(3) };
+    private bool _viberNew;
+    private bool _viberDotChecking;
     private readonly TaskbarIcon _tray;
 
     private Service _active = WhatsApp;
@@ -52,6 +55,7 @@ public partial class MainWindow : Window
         _viberPoll.Tick += ViberPoll_Tick;
         _viberWatch.Tick += ViberWatch_Tick;
         _idleCheck.Tick += IdleCheck_Tick;
+        _viberDot.Tick += ViberDot_Tick;
 
         Theme.Apply(_settings.Theme);
         ApplyLayout();
@@ -92,6 +96,23 @@ public partial class MainWindow : Window
         await InitWebAsync(WebTelegram, Telegram);
         StartViber();
         _viberWatch.Start();
+        _viberDot.Start();
+    }
+
+    private async void ViberDot_Tick(object? sender, EventArgs e)
+    {
+        if (_viberDotChecking) return;
+        _viberDotChecking = true;
+        try
+        {
+            bool? hasNew = await Task.Run(ViberTrayWatcher.Check);
+            // null = ikonica nije nađena (sakrivena pod „^“ ili Viber ugašen)
+            SetViberNew(hasNew == true);
+        }
+        finally
+        {
+            _viberDotChecking = false;
+        }
     }
 
     // ===================== Servisi i prebacivanje =====================
@@ -214,33 +235,40 @@ public partial class MainWindow : Window
     {
         _unread[id] = count;
 
-        var (badge, text) = id switch
-        {
-            "wa" => (BadgeWhatsApp, BadgeWhatsAppText),
-            "tg" => (BadgeTelegram, BadgeTelegramText),
-            _ => (BadgeViber, BadgeViberText),
-        };
+        var (badge, text) = id == "wa" ? (BadgeWhatsApp, BadgeWhatsAppText) : (BadgeTelegram, BadgeTelegramText);
         badge.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
         text.Text = count > 99 ? "99+" : count.ToString();
 
         UpdateTitles();
     }
 
+    /// <summary>Viber daje samo „ima novih“ (crvena tačka u trayu), bez broja.</summary>
+    private void SetViberNew(bool hasNew)
+    {
+        if (_viberNew == hasNew) return;
+        _viberNew = hasNew;
+        BadgeViber.Visibility = hasNew ? Visibility.Visible : Visibility.Collapsed;
+        UpdateTitles();
+    }
+
     private void UpdateTitles()
     {
         int total = _unread.Values.Sum();
-        string prefix = total > 0 ? $"({total}) " : "";
+        string label = total > 0 ? (_viberNew ? $"{total}+" : total.ToString()) : (_viberNew ? "•" : "");
+        string prefix = label.Length > 0 ? $"({label}) " : "";
 
         Title = $"{prefix}ChatZ — {_active.Name}";
-        StatusUnread.Text = $"Ukupno nepročitano: {total}";
-        _tray.ToolTipText = total > 0 ? $"ChatZ — {total} nepročitanih" : "ChatZ";
-        TaskbarInfo.Overlay = total > 0 ? CreateBadgeImage(total) : null;
+        StatusUnread.Text = $"Ukupno nepročitano: {total}" + (_viberNew ? " + nove Viber poruke" : "");
+        _tray.ToolTipText = label.Length > 0
+            ? $"ChatZ — {total} nepročitanih" + (_viberNew ? " + Viber" : "")
+            : "ChatZ";
+        TaskbarInfo.Overlay = label.Length > 0 ? CreateBadgeImage(label) : null;
     }
 
-    private ImageSource CreateBadgeImage(int count)
+    private ImageSource CreateBadgeImage(string label)
     {
         const int size = 32;
-        string label = count > 99 ? "99+" : count.ToString();
+        if (label.Length > 3) label = "99+";
         double pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 
         var visual = new DrawingVisual();
@@ -325,38 +353,8 @@ public partial class MainWindow : Window
             ViberHostControl.Detach();
             ShowViberStatus("Viber je zatvoren",
                 "Viber Desktop je ugašen ili se restartovao (npr. posle update-a).", retry: true, browse: false);
-            SetUnread("vb", 0);
+            SetViberNew(false);
         }
-    }
-
-    private async void ViberDiagnostics_Click(object sender, RoutedEventArgs e)
-    {
-        string baseFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
-            "ChatZ-viber-dijagnostika");
-        IntPtr hwnd = ViberHostControl.IsAttached ? ViberHostControl.ViberWindow : IntPtr.Zero;
-
-        string folder;
-        Cursor = Cursors.Wait;
-        try
-        {
-            folder = await Task.Run(() => ViberDiagnostics.Write(baseFolder, hwnd));
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "ChatZ", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-        finally
-        {
-            Cursor = null;
-        }
-
-        MessageBox.Show(this,
-            "Snimljeno u folder ChatZ-viber-dijagnostika na Desktopu.\n\n" +
-            "Snimi dva puta: jednom dok imaš nepročitane Viber poruke, i jednom kad ih sve pročitaš. " +
-            "Onda ceo folder spakuj u zip (desni klik → Pošalji u → Kompresovana fascikla) i pošalji ga.",
-            "ChatZ", MessageBoxButton.OK, MessageBoxImage.Information);
-        try { Process.Start("explorer.exe", $"\"{baseFolder}\""); } catch { }
     }
 
     // ===================== Tema i raspored =====================
@@ -582,6 +580,7 @@ public partial class MainWindow : Window
 
         _viberPoll.Stop();
         _viberWatch.Stop();
+        _viberDot.Stop();
         _idleCheck.Stop();
         ViberHostControl.Detach(); // Viber nastavlja da radi u svom trayu
         base.OnClosing(e);
