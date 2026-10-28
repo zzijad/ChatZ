@@ -29,7 +29,6 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, int> _unread = new() { ["wa"] = 0, ["tg"] = 0, ["vb"] = 0 };
     private readonly DispatcherTimer _viberPoll = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private readonly DispatcherTimer _viberWatch = new() { Interval = TimeSpan.FromSeconds(2) };
-    private readonly DispatcherTimer _viberCount = new() { Interval = TimeSpan.FromSeconds(5) };
     private readonly DispatcherTimer _idleCheck = new() { Interval = TimeSpan.FromSeconds(15) };
     private readonly TaskbarIcon _tray;
 
@@ -37,7 +36,6 @@ public partial class MainWindow : Window
     private bool _exiting;
     private bool _startHidden;
     private bool _viberWasAttached;
-    private bool _viberScanning;
     private int _viberPollTries;
 
     private bool _locked;
@@ -53,7 +51,6 @@ public partial class MainWindow : Window
 
         _viberPoll.Tick += ViberPoll_Tick;
         _viberWatch.Tick += ViberWatch_Tick;
-        _viberCount.Tick += ViberCount_Tick;
         _idleCheck.Tick += IdleCheck_Tick;
 
         RefreshAutostartUi();
@@ -89,7 +86,6 @@ public partial class MainWindow : Window
         await InitWebAsync(WebTelegram, Telegram);
         StartViber();
         _viberWatch.Start();
-        _viberCount.Start();
     }
 
     // ===================== Servisi i prebacivanje =====================
@@ -327,40 +323,17 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void ViberCount_Tick(object? sender, EventArgs e)
-    {
-        if (_viberScanning || !ViberHostControl.IsAttached) return;
-
-        _viberScanning = true;
-        try
-        {
-            IntPtr hwnd = ViberHostControl.ViberWindow;
-            int? count = await Task.Run(() => ViberUnread.Count(hwnd));
-            if (_unread["vb"] != (count ?? 0)) SetUnread("vb", count ?? 0);
-        }
-        finally
-        {
-            _viberScanning = false;
-        }
-    }
-
     private async void ViberDiagnostics_Click(object sender, RoutedEventArgs e)
     {
-        if (!ViberHostControl.IsAttached)
-        {
-            MessageBox.Show(this, "Viber trenutno nije povezan sa ChatZ-om.", "ChatZ",
-                MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
+        string baseFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+            "ChatZ-viber-dijagnostika");
+        IntPtr hwnd = ViberHostControl.IsAttached ? ViberHostControl.ViberWindow : IntPtr.Zero;
 
-        string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
-            "ChatZ-viber-dijagnostika.txt");
-        IntPtr hwnd = ViberHostControl.ViberWindow;
-
+        string folder;
         Cursor = Cursors.Wait;
         try
         {
-            await Task.Run(() => ViberUnread.WriteDiagnostics(hwnd, path));
+            folder = await Task.Run(() => ViberDiagnostics.Write(baseFolder, hwnd));
         }
         catch (Exception ex)
         {
@@ -373,11 +346,11 @@ public partial class MainWindow : Window
         }
 
         MessageBox.Show(this,
-            "Snimljeno na Desktop: ChatZ-viber-dijagnostika.txt\n\n" +
-            "Imena i tekst poruka su sakriveni, ostali su samo brojevi i vrste elemenata. " +
-            "Najbolje je da pre snimanja imaš bar jednu nepročitanu Viber poruku.",
+            "Snimljeno u folder ChatZ-viber-dijagnostika na Desktopu.\n\n" +
+            "Snimi dva puta: jednom dok imaš nepročitane Viber poruke, i jednom kad ih sve pročitaš. " +
+            "Onda ceo folder spakuj u zip (desni klik → Pošalji u → Kompresovana fascikla) i pošalji ga.",
             "ChatZ", MessageBoxButton.OK, MessageBoxImage.Information);
-        try { Process.Start("explorer.exe", $"/select,\"{path}\""); } catch { }
+        try { Process.Start("explorer.exe", $"\"{baseFolder}\""); } catch { }
     }
 
     // ===================== PIN zaštita =====================
@@ -563,7 +536,6 @@ public partial class MainWindow : Window
 
         _viberPoll.Stop();
         _viberWatch.Stop();
-        _viberCount.Stop();
         _idleCheck.Stop();
         ViberHostControl.Detach(); // Viber nastavlja da radi u svom trayu
         base.OnClosing(e);

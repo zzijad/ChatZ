@@ -95,6 +95,37 @@ internal static class Native
         return TimeSpan.FromMilliseconds(idleMs);
     }
 
+    public const uint WM_GETICON = 0x007F;
+    public const int ICON_SMALL = 0;
+    public const int ICON_BIG = 1;
+    public const int ICON_SMALL2 = 2;
+    public const int GCLP_HICON = -14;
+    public const int GCLP_HICONSM = -34;
+
+    [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr FindWindow(string? className, string? windowName);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hWnd, StringBuilder name, int max);
+
+    [DllImport("user32.dll", EntryPoint = "GetClassLongPtrW")]
+    private static extern IntPtr GetClassLongPtr64(IntPtr hWnd, int index);
+    [DllImport("user32.dll", EntryPoint = "GetClassLongW")]
+    private static extern uint GetClassLong32(IntPtr hWnd, int index);
+
+    public static IntPtr GetClassLongPtrSafe(IntPtr hWnd, int index) =>
+        IntPtr.Size == 8 ? GetClassLongPtr64(hWnd, index) : new IntPtr(GetClassLong32(hWnd, index));
+
+    public static string GetClass(IntPtr hWnd)
+    {
+        var sb = new StringBuilder(256);
+        GetClassName(hWnd, sb, sb.Capacity);
+        return sb.ToString();
+    }
+
     public static string GetTitle(IntPtr hWnd)
     {
         var sb = new StringBuilder(256);
