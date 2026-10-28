@@ -124,7 +124,7 @@ public static class ViberDiagnostics
                 cache.Add(AutomationElement.NameProperty);
                 AutomationElementCollection all;
                 using (cache.Activate())
-                    all = root.FindAll(TreeScope.Descendants, Condition.TrueCondition);
+                    all = root.FindAll(TreeScope.Descendants, System.Windows.Automation.Condition.TrueCondition);
                 foreach (AutomationElement el in all)
                 {
                     string name = el.Cached.Name ?? "";
