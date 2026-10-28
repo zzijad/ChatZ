@@ -9,7 +9,7 @@
         WindowStartupLocation="CenterScreen"
         Icon="/Assets/chatz.ico"
         FontFamily="Segoe UI"
-        Background="{StaticResource PageBrush}"
+        Background="{DynamicResource PageBrush}"
         PreviewKeyDown="Window_PreviewKeyDown">
 
     <Window.TaskbarItemInfo>
@@ -35,7 +35,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="30"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="76"/>
@@ -122,6 +122,19 @@
                     <ContextMenu>
                         <MenuItem x:Name="MenuAutostart" Header="Pokretanje sa Windowsom"
                                   IsCheckable="True" Click="Autostart_Click"/>
+                        <MenuItem Header="Tema">
+                            <MenuItem x:Name="MenuThemeSystem" Header="Prati Windows" IsCheckable="True"
+                                      Tag="system" Click="Theme_Click"/>
+                            <MenuItem x:Name="MenuThemeLight" Header="Svetla" IsCheckable="True"
+                                      Tag="light" Click="Theme_Click"/>
+                            <MenuItem x:Name="MenuThemeDark" Header="Tamna" IsCheckable="True"
+                                      Tag="dark" Click="Theme_Click"/>
+                        </MenuItem>
+                        <MenuItem x:Name="MenuShowHeader" Header="Prikaži zaglavlje" IsCheckable="True"
+                                  Click="Layout_Click"/>
+                        <MenuItem x:Name="MenuShowFooter" Header="Prikaži statusnu traku" IsCheckable="True"
+                                  Click="Layout_Click"/>
+                        <Separator/>
                         <MenuItem Header="PIN zaštita…" Click="PinSettings_Click"/>
                         <MenuItem x:Name="MenuLockNow" Header="Zaključaj odmah" InputGestureText="Ctrl+L"
                                   Click="LockNow_Click"/>
@@ -144,22 +157,22 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <StackPanel Orientation="Horizontal" Margin="16,10,16,8">
+            <StackPanel x:Name="HeaderBar" Orientation="Horizontal" Margin="16,10,16,8">
                 <TextBlock x:Name="HeaderName" Text="WhatsApp" FontSize="18" FontWeight="SemiBold"
-                           VerticalAlignment="Center" Foreground="#1B1E23"/>
-                <Border Background="#E6E9ED" CornerRadius="10" Padding="10,3" Margin="12,0,0,0"
+                           VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}"/>
+                <Border Background="{DynamicResource ChipBrush}" CornerRadius="10" Padding="10,3" Margin="12,0,0,0"
                         VerticalAlignment="Center">
                     <TextBlock x:Name="HeaderTech" Text="WebView2" FontSize="12"
-                               Foreground="{StaticResource MutedBrush}"/>
+                               Foreground="{DynamicResource MutedBrush}"/>
                 </Border>
             </StackPanel>
 
-            <Border Grid.Row="1" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0">
+            <Border x:Name="ContentBorder" Grid.Row="1" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0">
                 <Grid>
                     <wv2:WebView2 x:Name="WebWhatsApp" Visibility="Hidden"/>
                     <wv2:WebView2 x:Name="WebTelegram" Visibility="Hidden"/>
 
-                    <Grid x:Name="ViberPane" Visibility="Hidden" Background="White">
+                    <Grid x:Name="ViberPane" Visibility="Hidden" Background="{DynamicResource SurfaceBrush}">
                         <local:ViberHost x:Name="ViberHostControl" Visibility="Hidden"/>
 
                         <StackPanel x:Name="ViberPlaceholder" HorizontalAlignment="Center"
@@ -170,10 +183,10 @@
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Grid>
                             <TextBlock x:Name="ViberStatusTitle" Text="Pokrećem Viber…" FontSize="17"
-                                       FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="#1B1E23"/>
+                                       FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="{DynamicResource TextBrush}"/>
                             <TextBlock x:Name="ViberStatusText" FontSize="14" TextWrapping="Wrap"
                                        TextAlignment="Center" Margin="0,8,0,0"
-                                       Foreground="{StaticResource MutedBrush}"
+                                       Foreground="{DynamicResource MutedBrush}"
                                        Text="ChatZ pokreće instalirani Viber Desktop i ugrađuje njegov prozor ovde."/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
                                 <Button x:Name="ViberRetryButton" Content="Pokreni ponovo"
@@ -191,7 +204,7 @@
 
         <!-- ===== Ekran za zaključavanje (pokriva i traku i sadržaj) ===== -->
         <Grid x:Name="LockPanel" Grid.Row="0" Grid.ColumnSpan="2" Visibility="Collapsed"
-              Background="{StaticResource PageBrush}">
+              Background="{DynamicResource PageBrush}">
             <StackPanel Width="300" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Grid Width="64" Height="64" Margin="0,0,0,14">
                     <Ellipse Fill="#2B3440"/>
@@ -199,12 +212,12 @@
                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Grid>
                 <TextBlock Text="ChatZ je zaključan" FontSize="18" FontWeight="SemiBold"
-                           HorizontalAlignment="Center" Foreground="#1B1E23"/>
+                           HorizontalAlignment="Center" Foreground="{DynamicResource TextBrush}"/>
                 <TextBlock Text="Unesi PIN ili lozinku" FontSize="13" Margin="0,4,0,16"
-                           HorizontalAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                           HorizontalAlignment="Center" Foreground="{DynamicResource MutedBrush}"/>
                 <PasswordBox x:Name="LockPassword" Height="40" FontSize="18" Padding="10,6"
                              HorizontalContentAlignment="Center" KeyDown="LockPassword_KeyDown"/>
-                <TextBlock x:Name="LockError" Foreground="#B3261E" FontSize="13" TextWrapping="Wrap"
+                <TextBlock x:Name="LockError" Foreground="{DynamicResource ErrorBrush}" FontSize="13" TextWrapping="Wrap"
                            TextAlignment="Center" Margin="0,8,0,0" Visibility="Collapsed"/>
                 <Button x:Name="UnlockButton" Content="Otključaj" Style="{StaticResource PlainButton}"
                         Margin="0,12,0,0" Click="Unlock_Click"/>
@@ -212,15 +225,15 @@
         </Grid>
 
         <!-- ===== Statusna traka ===== -->
-        <Border Grid.Row="1" Grid.ColumnSpan="2" Background="White"
-                BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0">
+        <Border Grid.Row="1" Grid.ColumnSpan="2" x:Name="FooterBar" Height="30" Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0">
             <StackPanel Orientation="Horizontal" Margin="16,0" VerticalAlignment="Center">
                 <TextBlock x:Name="StatusUnread" Text="Ukupno nepročitano: 0" FontSize="12"
-                           Foreground="{StaticResource MutedBrush}"/>
+                           Foreground="{DynamicResource MutedBrush}"/>
                 <TextBlock Text="Zatvaranje → tray" FontSize="12" Margin="18,0,0,0"
-                           Foreground="{StaticResource MutedBrush}"/>
+                           Foreground="{DynamicResource MutedBrush}"/>
                 <TextBlock x:Name="StatusAutostart" Text="Pokretanje sa Windowsom: isključeno"
-                           FontSize="12" Margin="18,0,0,0" Foreground="{StaticResource MutedBrush}"/>
+                           FontSize="12" Margin="18,0,0,0" Foreground="{DynamicResource MutedBrush}"/>
             </StackPanel>
         </Border>
     </Grid>

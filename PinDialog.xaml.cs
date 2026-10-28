@@ -11,6 +11,7 @@ public partial class PinDialog : Window
     {
         InitializeComponent();
         _settings = settings;
+        SourceInitialized += (_, _) => Theme.ApplyTitleBar(this);
 
         bool enabled = settings.PinEnabled;
         CurrentPanel.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;

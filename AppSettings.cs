@@ -17,6 +17,11 @@ public class AppSettings
     /// <summary>Zaključavanje posle ovoliko minuta neaktivnosti (0 = nikad).</summary>
     public int AutoLockMinutes { get; set; } = 5;
 
+    /// <summary>"system", "light" ili "dark".</summary>
+    public string Theme { get; set; } = "system";
+    public bool ShowHeader { get; set; } = true;
+    public bool ShowFooter { get; set; } = true;
+
     public bool PinEnabled => !string.IsNullOrEmpty(PinHash) && !string.IsNullOrEmpty(PinSalt);
 
     public static string DataDir { get; } =

@@ -53,6 +53,12 @@ public partial class MainWindow : Window
         _viberWatch.Tick += ViberWatch_Tick;
         _idleCheck.Tick += IdleCheck_Tick;
 
+        Theme.Apply(_settings.Theme);
+        ApplyLayout();
+        RefreshThemeMenu();
+        SourceInitialized += (_, _) => Theme.ApplyTitleBar(this);
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
+
         RefreshAutostartUi();
         RefreshPinUi();
         if (_settings.PinEnabled) Lock();
@@ -353,6 +359,52 @@ public partial class MainWindow : Window
         try { Process.Start("explorer.exe", $"\"{baseFolder}\""); } catch { }
     }
 
+    // ===================== Tema i raspored =====================
+
+    private void Theme_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: string mode })
+        {
+            _settings.Theme = mode;
+            _settings.Save();
+            Theme.Apply(mode);
+        }
+        RefreshThemeMenu();
+    }
+
+    private void RefreshThemeMenu()
+    {
+        MenuThemeSystem.IsChecked = _settings.Theme == "system";
+        MenuThemeLight.IsChecked = _settings.Theme == "light";
+        MenuThemeDark.IsChecked = _settings.Theme == "dark";
+        MenuShowHeader.IsChecked = _settings.ShowHeader;
+        MenuShowFooter.IsChecked = _settings.ShowFooter;
+    }
+
+    private void Layout_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.ShowHeader = MenuShowHeader.IsChecked;
+        _settings.ShowFooter = MenuShowFooter.IsChecked;
+        _settings.Save();
+        ApplyLayout();
+    }
+
+    private void ApplyLayout()
+    {
+        HeaderBar.Visibility = _settings.ShowHeader ? Visibility.Visible : Visibility.Collapsed;
+        ContentBorder.BorderThickness = new Thickness(0, _settings.ShowHeader ? 1 : 0, 0, 0);
+        FooterBar.Visibility = _settings.ShowFooter ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void SystemEvents_UserPreferenceChanged(object sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category != Microsoft.Win32.UserPreferenceCategory.General) return;
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (_settings.Theme == "system") Theme.Apply("system");
+        });
+    }
+
     // ===================== PIN zaštita =====================
 
     private void Lock()
@@ -537,6 +589,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged;
         _tray.Dispose();
         base.OnClosed(e);
         Application.Current.Shutdown();

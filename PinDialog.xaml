@@ -5,10 +5,10 @@
         Width="380" SizeToContent="Height"
         ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False" FontFamily="Segoe UI"
-        Background="{StaticResource PageBrush}">
+        Background="{DynamicResource PageBrush}" Foreground="{DynamicResource TextBrush}">
     <StackPanel Margin="20">
         <TextBlock x:Name="IntroText" TextWrapping="Wrap" FontSize="13"
-                   Foreground="{StaticResource MutedBrush}" Margin="0,0,0,14"/>
+                   Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,14"/>
 
         <StackPanel x:Name="CurrentPanel">
             <TextBlock Text="Trenutni PIN / lozinka" FontSize="13" Margin="0,0,0,4"/>
@@ -31,9 +31,9 @@
             <ComboBoxItem Content="60 minuta" Tag="60"/>
         </ComboBox>
         <TextBlock Text="ChatZ se zaključava i kad ga zatvoriš na X (ode u tray). Minimizovanje ne zaključava."
-                   FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" Margin="0,0,0,12"/>
+                   FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,12"/>
 
-        <TextBlock x:Name="ErrorText" Foreground="#B3261E" FontSize="13" TextWrapping="Wrap"
+        <TextBlock x:Name="ErrorText" Foreground="{DynamicResource ErrorBrush}" FontSize="13" TextWrapping="Wrap"
                    Margin="0,0,0,10" Visibility="Collapsed"/>
 
         <DockPanel LastChildFill="False">

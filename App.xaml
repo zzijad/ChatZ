@@ -9,6 +9,11 @@
         <SolidColorBrush x:Key="PageBrush" Color="#F6F7F9"/>
         <SolidColorBrush x:Key="LineBrush" Color="#DFE2E6"/>
         <SolidColorBrush x:Key="MutedBrush" Color="#4D5661"/>
+        <!-- Ove boje menja Theme.Apply (svetla / tamna) -->
+        <SolidColorBrush x:Key="TextBrush" Color="#1B1E23"/>
+        <SolidColorBrush x:Key="ChipBrush" Color="#E6E9ED"/>
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="ErrorBrush" Color="#B3261E"/>
 
         <!-- Dugme servisa u levoj traci -->
         <Style x:Key="ServiceButton" TargetType="RadioButton">
