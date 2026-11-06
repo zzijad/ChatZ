@@ -69,6 +69,8 @@ public partial class MainWindow : Window
         _idleCheck.Start();
 
         Loaded += MainWindow_Loaded;
+        IsVisibleChanged += (_, _) => UpdateMemoryTargets();
+        StateChanged += (_, _) => UpdateMemoryTargets();
     }
 
     /// <summary>Pokretanje sa --tray: prozor se napravi (da bi WebView2 i Viber radili), pa sakrije.</summary>
@@ -138,6 +140,7 @@ public partial class MainWindow : Window
         _settings.LastService = _active.Id;
         _settings.Save();
         UpdateTitles();
+        UpdateMemoryTargets();
     }
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -169,16 +172,113 @@ public partial class MainWindow : Window
 
     // ===================== WebView2 (WhatsApp, Telegram) =====================
 
+    // Svi servisi dele JEDNO WebView2 okruženje (jedan browser, GPU, network… proces),
+    // a sesije su odvojene profilima. Ranije je svaki servis imao svoj Chromium.
+    // WhatsApp koristi podrazumevani profil, Telegram profil "tg".
+    private static string WebDataRoot => Path.Combine(AppSettings.DataDir, "WebView2");
+    private static string SharedDataDir => Path.Combine(WebDataRoot, "shared");
+    private const string TelegramProfile = "tg";
+
+    private Task<CoreWebView2Environment>? _envTask;
+
+    private Task<CoreWebView2Environment> GetEnvironmentAsync()
+    {
+        if (_envTask != null) return _envTask;
+        MigrateWhatsAppData();
+        return _envTask = CoreWebView2Environment.CreateAsync(null, SharedDataDir);
+    }
+
+    /// <summary>
+    /// Prelaz sa starog rasporeda (WebView2\wa i WebView2\tg) na zajednički folder,
+    /// tako da korisnik ne mora ponovo da se prijavljuje.
+    /// WhatsApp folder se samo preimenuje (ostaje i "Local State" sa ključem za kolačiće).
+    /// </summary>
+    private static void MigrateWhatsAppData()
+    {
+        if (Directory.Exists(SharedDataDir)) return;
+        try
+        {
+            string oldWa = Path.Combine(WebDataRoot, "wa");
+            if (Directory.Exists(oldWa)) Directory.Move(oldWa, SharedDataDir);
+        }
+        catch { /* nova prijava, ništa strašno */ }
+    }
+
+    /// <summary>Stari Telegram profil se kopira u profil "tg" zajedničkog foldera (pre prvog pokretanja tog profila).</summary>
+    private static void MigrateTelegramData()
+    {
+        string oldTg = Path.Combine(WebDataRoot, "tg");
+        string src = Path.Combine(oldTg, "EBWebView", "Default");
+        string dst = Path.Combine(SharedDataDir, "EBWebView", TelegramProfile);
+        if (!Directory.Exists(src) || Directory.Exists(dst)) return;
+        try
+        {
+            CopyDirectory(src, dst);
+            try { Directory.Delete(oldTg, true); } catch { }
+        }
+        catch
+        {
+            try { Directory.Delete(dst, true); } catch { }
+        }
+    }
+
+    private static void CopyDirectory(string src, string dst)
+    {
+        Directory.CreateDirectory(dst);
+        foreach (string file in Directory.GetFiles(src))
+        {
+            string name = Path.GetFileName(file);
+            if (name is "LOCK" or "lockfile") continue;
+            File.Copy(file, Path.Combine(dst, name), true);
+        }
+        foreach (string dir in Directory.GetDirectories(src))
+            CopyDirectory(dir, Path.Combine(dst, Path.GetFileName(dir)));
+    }
+
+    /// <summary>
+    /// Servis koji se trenutno ne gleda (ili ceo prozor u trayu) dobija nizak prioritet memorije:
+    /// Chromium agresivnije oslobađa keš. Stranica NIJE suspendovana, skripte rade,
+    /// pa poruke, notifikacije i brojač nepročitanih i dalje stižu.
+    /// </summary>
+    private void UpdateMemoryTargets()
+    {
+        bool windowShown = IsVisible && WindowState != WindowState.Minimized;
+        SetMemoryTarget(WebWhatsApp, windowShown && _active == WhatsApp);
+        SetMemoryTarget(WebTelegram, windowShown && _active == Telegram);
+    }
+
+    private static void SetMemoryTarget(WebView2 view, bool inUse)
+    {
+        try
+        {
+            if (view.CoreWebView2 is { } core)
+                core.MemoryUsageTargetLevel = inUse
+                    ? CoreWebView2MemoryUsageTargetLevel.Normal
+                    : CoreWebView2MemoryUsageTargetLevel.Low;
+        }
+        catch { /* stariji WebView2 Runtime bez ove opcije */ }
+    }
+
     private async Task InitWebAsync(WebView2 view, Service service)
     {
         try
         {
-            string folder = Path.Combine(AppSettings.DataDir, "WebView2", service.Id);
-            var env = await CoreWebView2Environment.CreateAsync(null, folder);
-            await view.EnsureCoreWebView2Async(env);
+            var env = await GetEnvironmentAsync();
+            if (service == Telegram)
+            {
+                MigrateTelegramData();
+                var options = env.CreateCoreWebView2ControllerOptions();
+                options.ProfileName = TelegramProfile;
+                await view.EnsureCoreWebView2Async(env, options);
+            }
+            else
+            {
+                await view.EnsureCoreWebView2Async(env);
+            }
 
             var core = view.CoreWebView2;
             core.Settings.IsStatusBarEnabled = false;
+            UpdateMemoryTargets();
 
             core.PermissionRequested += (_, args) =>
             {
