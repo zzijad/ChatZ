@@ -40,6 +40,8 @@ public partial class MainWindow : Window
     private bool _startHidden;
     private bool _viberWasAttached;
     private int _viberPollTries;
+    private int _viberHungTicks;
+    private bool _viberHungShown;
 
     private bool _locked;
     private int _failedAttempts;
@@ -69,8 +71,8 @@ public partial class MainWindow : Window
         _idleCheck.Start();
 
         Loaded += MainWindow_Loaded;
-        IsVisibleChanged += (_, _) => UpdateMemoryTargets();
-        StateChanged += (_, _) => UpdateMemoryTargets();
+        IsVisibleChanged += (_, _) => { UpdateMemoryTargets(); RefreshViberSoon(); };
+        StateChanged += (_, _) => { UpdateMemoryTargets(); RefreshViberSoon(); };
     }
 
     /// <summary>Pokretanje sa --tray: prozor se napravi (da bi WebView2 i Viber radili), pa sakrije.</summary>
@@ -136,6 +138,7 @@ public partial class MainWindow : Window
             if (_active == Viber) ViberHostControl.FocusViber();
             else (_active == WhatsApp ? WebWhatsApp : WebTelegram).Focus();
         }
+        RefreshViberSoon();
 
         _settings.LastService = _active.Id;
         _settings.Save();
@@ -450,11 +453,56 @@ public partial class MainWindow : Window
         if (_viberWasAttached && !ViberHostControl.IsAttached)
         {
             _viberWasAttached = false;
+            _viberHungTicks = 0;
+            _viberHungShown = false;
             ViberHostControl.Detach();
             ShowViberStatus("Viber je zatvoren",
                 "Viber Desktop je ugašen ili se restartovao (npr. posle update-a).", retry: true, browse: false);
             SetViberNew(false);
+            return;
         }
+        if (!_viberWasAttached) return;
+
+        // Viber se sam izvukao iz ChatZ-a (npr. klik na njegovu tray ikonicu) — vrati ga nazad.
+        if (!ViberHostControl.IsInContainer)
+        {
+            ViberHostControl.Refresh();
+            return;
+        }
+
+        // Zaglavljen Viber: posle ~10 s „Not responding“ ponudi restart umesto mrtvog prozora.
+        if (ViberHostControl.IsHung)
+        {
+            if (++_viberHungTicks >= 5 && !_viberHungShown)
+            {
+                _viberHungShown = true;
+                ShowViberStatus("Viber ne odgovara",
+                    "Viber Desktop se zaglavio. Klikni „Pokreni ponovo“ da ga ChatZ ugasi i ponovo pokrene.",
+                    retry: true, browse: false);
+            }
+        }
+        else
+        {
+            _viberHungTicks = 0;
+            if (_viberHungShown)
+            {
+                // Viber se sam oporavio.
+                _viberHungShown = false;
+                ViberPlaceholder.Visibility = Visibility.Collapsed;
+                ViberHostControl.Visibility = Visibility.Visible;
+                RefreshViberSoon();
+            }
+        }
+    }
+
+    /// <summary>Osvežava Viber prozor posle prikazivanja (kad WPF završi raspored).</summary>
+    private void RefreshViberSoon()
+    {
+        if (_active != Viber || _locked || !IsVisible || WindowState == WindowState.Minimized) return;
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (_active == Viber && !_locked && !_viberHungShown) ViberHostControl.Refresh();
+        }, DispatcherPriority.Loaded);
     }
 
     // ===================== Tema i raspored =====================
@@ -534,6 +582,7 @@ public partial class MainWindow : Window
             LockPassword.Clear();
             LockPanel.Visibility = Visibility.Collapsed;
             ContentRoot.Visibility = Visibility.Visible;
+            RefreshViberSoon();
 
             if (_active == Viber) ViberHostControl.FocusViber();
             else (_active == WhatsApp ? WebWhatsApp : WebTelegram).Focus();
@@ -602,7 +651,18 @@ public partial class MainWindow : Window
         ViberBrowseButton.Visibility = browse ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void ViberReconnect_Click(object sender, RoutedEventArgs e) => StartViber();
+    private void ViberReconnect_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viberHungShown || ViberHostControl.IsHung)
+        {
+            ViberHostControl.Detach();
+            _viberWasAttached = false;
+            _viberHungShown = false;
+            _viberHungTicks = 0;
+            ViberLocator.Kill();
+        }
+        StartViber();
+    }
 
     private void ViberBrowse_Click(object sender, RoutedEventArgs e)
     {

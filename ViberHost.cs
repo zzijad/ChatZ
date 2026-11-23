@@ -47,7 +47,7 @@ public class ViberHost : HwndHost
         _origStyle = Native.GetLong(_viber, Native.GWL_STYLE);
         _origExStyle = Native.GetLong(_viber, Native.GWL_EXSTYLE);
 
-        if (Native.IsIconic(_viber)) Native.ShowWindow(_viber, Native.SW_RESTORE);
+        if (Native.IsIconic(_viber)) Native.ShowWindowAsync(_viber, Native.SW_RESTORE);
 
         long style = _origStyle & ~(Native.WS_POPUP | Native.WS_CAPTION | Native.WS_THICKFRAME |
                                     Native.WS_SYSMENU | Native.WS_MINIMIZEBOX | Native.WS_MAXIMIZEBOX);
@@ -59,8 +59,9 @@ public class ViberHost : HwndHost
         Native.SetLong(_viber, Native.GWL_EXSTYLE, exStyle);
         Native.SetParent(_viber, _container);
         Native.SetWindowPos(_viber, IntPtr.Zero, 0, 0, 0, 0,
-            Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOZORDER | Native.SWP_FRAMECHANGED);
-        Native.ShowWindow(_viber, Native.SW_SHOW);
+            Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOZORDER | Native.SWP_FRAMECHANGED |
+            Native.SWP_ASYNCWINDOWPOS);
+        Native.ShowWindowAsync(_viber, Native.SW_SHOW);
         ResizeViber();
         return true;
     }
@@ -71,20 +72,21 @@ public class ViberHost : HwndHost
         if (_viber == IntPtr.Zero) return;
         if (Native.IsWindow(_viber))
         {
-            Native.ShowWindow(_viber, Native.SW_HIDE);
+            Native.ShowWindowAsync(_viber, Native.SW_HIDE);
             Native.SetParent(_viber, IntPtr.Zero);
             Native.SetLong(_viber, Native.GWL_STYLE, _origStyle & ~Native.WS_VISIBLE);
             Native.SetLong(_viber, Native.GWL_EXSTYLE, _origExStyle);
             Native.SetWindowPos(_viber, IntPtr.Zero, 0, 0, 0, 0,
                 Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOZORDER |
-                Native.SWP_NOACTIVATE | Native.SWP_FRAMECHANGED);
+                Native.SWP_NOACTIVATE | Native.SWP_FRAMECHANGED | Native.SWP_ASYNCWINDOWPOS);
         }
         _viber = IntPtr.Zero;
     }
 
     public void FocusViber()
     {
-        if (IsAttached) Native.SetFocus(_viber);
+        // SetFocus ka zaglavljenom Viberu bi zaledio i ChatZ.
+        if (IsAttached && !Native.IsHungAppWindow(_viber)) Native.SetFocus(_viber);
     }
 
     protected override void OnWindowPositionChanged(Rect rcBoundingBox)
@@ -109,7 +111,45 @@ public class ViberHost : HwndHost
     {
         if (!IsAttached || _container == IntPtr.Zero) return;
         Native.GetClientRect(_container, out var r);
-        Native.MoveWindow(_viber, 0, 0, r.Right - r.Left, r.Bottom - r.Top, true);
+        // ASYNC: Viber je drugi proces — sinhroni MoveWindow bi zaledio ChatZ ako Viber zastane.
+        Native.SetWindowPos(_viber, IntPtr.Zero, 0, 0, r.Right - r.Left, r.Bottom - r.Top,
+            Native.SWP_NOZORDER | Native.SWP_NOACTIVATE | Native.SWP_ASYNCWINDOWPOS);
+    }
+
+    /// <summary>Da li je Viber prozor i dalje stvarno u našem kontejneru.</summary>
+    public bool IsInContainer => IsAttached && Native.GetParent(_viber) == _container;
+
+    /// <summary>Viber ne odgovara (Windows ga smatra „Not responding“).</summary>
+    public bool IsHung => IsAttached && Native.IsHungAppWindow(_viber);
+
+    /// <summary>
+    /// Posle skrivanja (prebacivanje servisa, PIN zaključavanje, tray) Viber (Qt) često
+    /// ne nastavi da crta i izgleda zamrznuto. Ovde se prozor ponovo prikaže,
+    /// „gurne“ za 1 px i natera na kompletno iscrtavanje.
+    /// </summary>
+    public void Refresh()
+    {
+        if (!IsAttached || _container == IntPtr.Zero) return;
+
+        // Viber se možda sam „otkačio“ (npr. klik na njegovu tray ikonicu) — vrati ga.
+        if (Native.GetParent(_viber) != _container)
+        {
+            IntPtr hwnd = _viber;
+            _viber = IntPtr.Zero;
+            Attach(hwnd);
+            return;
+        }
+
+        if (!Native.IsWindowVisible(_viber)) Native.ShowWindowAsync(_viber, Native.SW_SHOW);
+
+        Native.GetClientRect(_container, out var r);
+        int w = r.Right - r.Left, h = r.Bottom - r.Top;
+        if (w <= 1 || h <= 1) return;
+        const uint flags = Native.SWP_NOZORDER | Native.SWP_NOACTIVATE | Native.SWP_ASYNCWINDOWPOS;
+        Native.SetWindowPos(_viber, IntPtr.Zero, 0, 0, w - 1, h - 1, flags);
+        Native.SetWindowPos(_viber, IntPtr.Zero, 0, 0, w, h, flags | Native.SWP_FRAMECHANGED);
+        Native.RedrawWindow(_viber, IntPtr.Zero, IntPtr.Zero,
+            Native.RDW_INVALIDATE | Native.RDW_ERASE | Native.RDW_FRAME | Native.RDW_ALLCHILDREN);
     }
 }
 
@@ -140,6 +180,15 @@ public static class ViberLocator
     }
 
     public static bool IsRunning() => Process.GetProcessesByName("Viber").Length > 0;
+
+    /// <summary>Gasi sve Viber procese (samo kad Viber ne odgovara i korisnik traži restart).</summary>
+    public static void Kill()
+    {
+        foreach (var p in Process.GetProcessesByName("Viber"))
+        {
+            try { p.Kill(entireProcessTree: true); p.WaitForExit(5000); } catch { }
+        }
+    }
 
     /// <summary>Glavni prozor Vibera (može biti i skriven u trayu).</summary>
     public static IntPtr FindMainWindow()
